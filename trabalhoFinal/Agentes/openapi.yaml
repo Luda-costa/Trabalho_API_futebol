@@ -68,11 +68,13 @@ components:
 
     Usuario:
       type: object
+      required: [id, nome, email, role, ativo, criadoEm]
       properties:
         id: { type: string, format: uuid }
         nome: { type: string }
         email: { type: string, format: email }
         role: { type: string, enum: [user, admin] }
+        ativo: { type: boolean }
         criadoEm: { type: string, format: date-time }
 
     Credenciais:
@@ -84,12 +86,14 @@ components:
 
     Sessao:
       type: object
+      required: [token, expiraEm]
       properties:
         token: { type: string, description: "JWT" }
         expiraEm: { type: string, format: date-time }
 
     Campeonato:
       type: object
+      required: [id, nome, pais, temporadaAtual]
       properties:
         id: { type: string, description: "id/código na football-data.org, ex.: PL" }
         nome: { type: string }
@@ -103,6 +107,7 @@ components:
 
     Time:
       type: object
+      required: [id, nome, sigla, escudoUrl, pais]
       properties:
         id: { type: integer }
         nome: { type: string }
@@ -112,11 +117,12 @@ components:
 
     Partida:
       type: object
+      required: [id, campeonatoId, dataHora, status, timeCasa, timeVisitante, placar]
       properties:
         id: { type: integer }
         campeonatoId: { type: string }
         dataHora: { type: string, format: date-time }
-        status: { type: string, enum: [SCHEDULED, LIVE, IN_PLAY, PAUSED, FINISHED, POSTPONED, SUSPENDED, CANCELED] }
+        status: { type: string, enum: [SCHEDULED, TIMED, IN_PLAY, PAUSED, EXTRA_TIME, PENALTY_SHOOTOUT, FINISHED, SUSPENDED, POSTPONED, CANCELLED, AWARDED] }
         timeCasa:
           $ref: '#/components/schemas/Time'
         timeVisitante:
@@ -137,6 +143,7 @@ components:
 
     Favorito:
       type: object
+      required: [id, tipo, itemExternoId, criadoEm]
       properties:
         id: { type: string, format: uuid }
         tipo: { type: string, enum: [TIME, CAMPEONATO] }
@@ -145,6 +152,7 @@ components:
 
     Paginacao:
       type: object
+      required: [page, pageSize, total]
       properties:
         page: { type: integer }
         pageSize: { type: integer }
