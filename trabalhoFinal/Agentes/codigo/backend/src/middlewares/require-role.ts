@@ -1,4 +1,4 @@
-import type { Role } from '@prisma/client';
+import type { Role } from '../domain/models.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 

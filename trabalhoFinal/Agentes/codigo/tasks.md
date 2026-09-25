@@ -25,7 +25,7 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
 ## 3. Detalhamento de Tarefas por Épico
 
 ### Épico 01: Infraestrutura, Configurações e Erros Padronizados
-- **TASK-01-01**: Configurar estrutura base do projeto Node.js/TypeScript, linter, formato de arquivos e variáveis de ambiente (`FOOTBALL_DATA_API_KEY`, `JWT_SECRET`, `PORT`, `DATABASE_URL`).
+- **TASK-01-01**: Configurar estrutura base do projeto Node.js/TypeScript, linter, formato de arquivos e variáveis de ambiente (`FOOTBALL_DATA_API_KEY`, `JWT_SECRET`, `PORT`, `DATA_DIR`).
   - *Requisitos:* RNF-09
 - **TASK-01-02**: Criar Middleware de Correlation ID (`X-Correlation-Id`). Deve ler o header recebido ou gerar UUID v4 se ausente, anexando no contexto AsyncLocalStorage/request, no logger estruturado e no header de resposta HTTP.
   - *Requisitos:* RNF-06, CA-12
@@ -33,11 +33,11 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
   - *Requisitos:* RNF-07, CA-13
 
 ### Épico 02: Persistência e Modelo de Dados Interno
-- **TASK-02-01**: Configurar banco de dados relacional (PostgreSQL) e ORM (Prisma/TypeORM).
+- **TASK-02-01**: Configurar persistência local simples em arquivos JSON para os dados internos da aplicação.
   - *Requisitos:* RNF-09
-- **TASK-02-02**: Criar schema/migration para a tabela `usuarios` (`id`, `nome`, `email`, `senha_hash`, `role`, `criado_em`).
+- **TASK-02-02**: Criar `usuarios.json` e o repositório de usuários (`id`, `nome`, `email`, `senhaHash`, `role`, `criadoEm`), preservando unicidade de e-mail.
   - *Requisitos:* RF-01, RF-08, RNF-09
-- **TASK-02-03**: Criar schema/migration para a tabela `favoritos` com restrição de unicidade composta `unique(usuario_id, tipo, item_externo_id)`.
+- **TASK-02-03**: Criar `favoritos.json` e o repositório de favoritos, impedindo duplicidade da combinação `usuarioId + tipo + itemExternoId`.
   - *Requisitos:* RF-04, RF-07, RN-02, RNF-09
 
 ### Épico 03: Autenticação, Usuários e RBAC
@@ -117,7 +117,7 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
 ## 4. Dependências e Ordem de Execução
 
 ```
-[Épico 01: Infra & Erros] ──▶ [Épico 02: Banco de Dados]
+[Épico 01: Infra & Erros] ──▶ [Épico 02: Persistência JSON]
                                        │
                                        ▼
                             [Épico 03: Auth & RBAC]

@@ -1,5 +1,4 @@
 import type { ErrorRequestHandler } from 'express';
-import { Prisma } from '@prisma/client';
 import { AppError } from '../errors/app-error.js';
 import { logger } from '../lib/logger.js';
 
@@ -11,15 +10,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     res.status(error.status).json({
       code: error.code,
       message: error.message,
-      correlationId
-    });
-    return;
-  }
-
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-    res.status(400).json({
-      code: 'DUPLICATE_RESOURCE',
-      message: 'Já existe um recurso com os mesmos dados únicos.',
       correlationId
     });
     return;

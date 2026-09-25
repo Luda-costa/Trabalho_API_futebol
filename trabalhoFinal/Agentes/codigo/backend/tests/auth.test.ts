@@ -8,7 +8,6 @@ beforeEach(() => {
   process.env = {
     ...ORIGINAL_ENV,
     NODE_ENV: 'test',
-    DATABASE_URL: 'postgresql://app:app@localhost:5432/test',
     JWT_SECRET: '12345678901234567890123456789012',
     FOOTBALL_DATA_API_KEY: 'test-key'
   };

@@ -1,4 +1,4 @@
-import type { Role } from '@prisma/client';
+import type { Role } from '../domain/models.js';
 import { AppError } from '../errors/app-error.js';
 import { userRepository } from '../repositories/user-repository.js';
 import { userService } from './user-service.js';

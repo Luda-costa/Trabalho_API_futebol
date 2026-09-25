@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import type { User } from '@prisma/client';
+import type { User } from '../domain/models.js';
 import { AppError } from '../errors/app-error.js';
 import { userRepository } from '../repositories/user-repository.js';
 import type { UsuarioPublicoDto } from '../contracts/dtos.js';

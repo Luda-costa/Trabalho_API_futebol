@@ -1,4 +1,4 @@
-import type { FavoriteType } from '@prisma/client';
+import type { FavoriteType } from '../domain/models.js';
 import { AppError } from '../errors/app-error.js';
 import { favoriteRepository } from '../repositories/favorite-repository.js';
 import type { FavoritoDto } from '../contracts/dtos.js';
