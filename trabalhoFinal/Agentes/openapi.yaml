@@ -1,0 +1,488 @@
+openapi: 3.0.3
+info:
+  title: Plataforma de Acompanhamento de Campeonatos de Futebol — API
+  version: "1.0.0"
+  description: >
+    Contrato da API interna (BFF). Dados esportivos (campeonatos, times, partidas)
+    são obtidos da football-data.org exclusivamente pelo backend e transformados
+    antes de chegar ao cliente. Nenhum payload bruto da API externa é exposto.
+
+servers:
+  - url: /api
+
+tags:
+  - name: Usuarios
+  - name: Sessoes
+  - name: Campeonatos
+  - name: Times
+  - name: Partidas
+  - name: Favoritos
+  - name: Admin
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Aceito se enviado pelo cliente; gerado pelo backend caso ausente.
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, correlationId]
+          properties:
+            code: { type: string, example: "FAVORITO_DUPLICADO" }
+            message: { type: string }
+            correlationId: { type: string, format: uuid }
+
+    UsuarioEntrada:
+      type: object
+      required: [nome, email, senha]
+      properties:
+        nome: { type: string }
+        email: { type: string, format: email }
+        senha: { type: string, format: password, minLength: 8 }
+
+    Usuario:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [user, admin] }
+        criadoEm: { type: string, format: date-time }
+
+    Credenciais:
+      type: object
+      required: [email, senha]
+      properties:
+        email: { type: string, format: email }
+        senha: { type: string, format: password }
+
+    Sessao:
+      type: object
+      properties:
+        token: { type: string, description: "JWT" }
+        expiraEm: { type: string, format: date-time }
+
+    Campeonato:
+      type: object
+      properties:
+        id: { type: string, description: "id/código na football-data.org, ex.: PL" }
+        nome: { type: string }
+        pais: { type: string }
+        temporadaAtual:
+          type: object
+          properties:
+            inicio: { type: string, format: date }
+            fim: { type: string, format: date }
+            rodadaAtual: { type: integer, nullable: true }
+
+    Time:
+      type: object
+      properties:
+        id: { type: integer }
+        nome: { type: string }
+        sigla: { type: string, nullable: true }
+        escudoUrl: { type: string, nullable: true }
+        pais: { type: string, nullable: true }
+
+    Partida:
+      type: object
+      properties:
+        id: { type: integer }
+        campeonatoId: { type: string }
+        dataHora: { type: string, format: date-time }
+        status: { type: string, enum: [SCHEDULED, LIVE, IN_PLAY, PAUSED, FINISHED, POSTPONED, SUSPENDED, CANCELED] }
+        timeCasa:
+          $ref: '#/components/schemas/Time'
+        timeVisitante:
+          $ref: '#/components/schemas/Time'
+        placar:
+          type: object
+          nullable: true
+          properties:
+            casa: { type: integer, nullable: true }
+            visitante: { type: integer, nullable: true }
+
+    FavoritoEntrada:
+      type: object
+      required: [tipo, itemExternoId]
+      properties:
+        tipo: { type: string, enum: [TIME, CAMPEONATO] }
+        itemExternoId: { type: string }
+
+    Favorito:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tipo: { type: string, enum: [TIME, CAMPEONATO] }
+        itemExternoId: { type: string }
+        criadoEm: { type: string, format: date-time }
+
+    Paginacao:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+  responses:
+    Unauthorized:
+      description: Não autenticado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Acesso negado (RBAC)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Erro de validação
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ExternalUnavailable:
+      description: Football-data.org indisponível (timeout/5xx/circuit breaker OPEN)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+security: []
+
+paths:
+  /usuarios:
+    post:
+      tags: [Usuarios]
+      summary: Cadastra um novo usuário
+      parameters: [{ $ref: '#/components/parameters/CorrelationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioEntrada' }
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/ValidationError' }
+
+  /sessoes:
+    post:
+      tags: [Sessoes]
+      summary: Autentica um usuário e emite um JWT
+      parameters: [{ $ref: '#/components/parameters/CorrelationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credenciais' }
+      responses:
+        '200':
+          description: Login efetuado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sessao' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /campeonatos:
+    get:
+      tags: [Campeonatos]
+      summary: Lista campeonatos
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+        - name: pais
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista de campeonatos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Campeonato' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /campeonatos/{id}:
+    get:
+      tags: [Campeonatos]
+      summary: Detalhe de um campeonato
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Campeonato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Campeonato' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /campeonatos/{id}/times:
+    get:
+      tags: [Campeonatos]
+      summary: Times de um campeonato
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Lista de times
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Time' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /campeonatos/{id}/partidas:
+    get:
+      tags: [Campeonatos]
+      summary: Partidas de um campeonato
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+        - { name: dataInicio, in: query, required: false, schema: { type: string, format: date } }
+        - { name: dataFim, in: query, required: false, schema: { type: string, format: date } }
+        - { name: status, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Lista de partidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Partida' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /times:
+    get:
+      tags: [Times]
+      summary: Lista times
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Lista de times
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Time' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /times/{id}:
+    get:
+      tags: [Times]
+      summary: Detalhe de um time
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Time
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Time' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /partidas:
+    get:
+      tags: [Partidas]
+      summary: Lista partidas (todas as competições)
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+        - { name: dataInicio, in: query, required: false, schema: { type: string, format: date } }
+        - { name: dataFim, in: query, required: false, schema: { type: string, format: date } }
+        - { name: timeId, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200':
+          description: Lista de partidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Partida' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /partidas/{id}:
+    get:
+      tags: [Partidas]
+      summary: Detalhe de uma partida
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Partida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Partida' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ExternalUnavailable' }
+
+  /favoritos:
+    get:
+      tags: [Favoritos]
+      summary: Lista os favoritos do usuário autenticado
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Lista de favoritos do usuário
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Favorito' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Favoritos]
+      summary: Cria um favorito (time ou campeonato) para o usuário autenticado
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationId' }
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Evita efeitos duplicados em caso de reenvio da requisição.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FavoritoEntrada' }
+      responses:
+        '201':
+          description: Favorito criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Favorito' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Favorito duplicado (RN-02)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /favoritos/{id}:
+    delete:
+      tags: [Favoritos]
+      summary: Remove um favorito próprio
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '204': { description: Removido com sucesso }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/usuarios:
+    get:
+      tags: [Admin]
+      summary: Lista todos os usuários (rota exclusiva de administrador)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados: { type: array, items: { $ref: '#/components/schemas/Usuario' } }
+                  paginacao: { $ref: '#/components/schemas/Paginacao' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/usuarios/{id}:
+    patch:
+      tags: [Admin]
+      summary: Ativa/desativa um usuário (operação exclusiva de administrador)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/CorrelationId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ativo]
+              properties:
+                ativo: { type: boolean }
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
