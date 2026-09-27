@@ -5,19 +5,19 @@ Este documento define o plano de execução detalhado do projeto **Plataforma de
 ---
 
 ## 1. Objetivo da Iteração
-Implementar e validar o Backend (BFF), o armazenamento interno de dados e a interface Frontend (SPA), garantindo 100% de conformidade com o contrato `openapi.yaml`, resiliência na integração externa com a `football-data.org` (timeout, retry, circuit breaker) e aplicando rigorosamente RBAC, JWT, Correlation ID e padronização de erros.
+Implementar e validar o Backend (BFF) em Node.js com JavaScript e Express, a persistência local em arquivos JSON e o Frontend em React, garantindo 100% de conformidade com o contrato `openapi.yaml`, resiliência na integração externa com a `football-data.org` (timeout, retry, circuit breaker) e aplicando rigorosamente RBAC, JWT, Correlation ID e padronização de erros.
 
 ---
 
 ## 2. Épicos
 - **E01**: Infraestrutura, Configurações e Erros Padronizados
-- **E02**: Persistência e Modelo de Dados Interno
+- **E02**: Persistência JSON e Modelo de Dados Interno
 - **E03**: Autenticação, Usuários e RBAC
 - **E04**: Cliente de Integração Externa e Resiliência (football-data.org)
 - **E05**: Camada de Transformação BFF e Rotas Esportivas (Leitura)
 - **E06**: Gestão de Favoritos e Idempotência
 - **E07**: Módulo de Administração
-- **E08**: Frontend (SPA)
+- **E08**: Frontend (React SPA)
 - **E09**: Testes de Integração, Qualidade e Validação Final
 
 ---
@@ -25,23 +25,23 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
 ## 3. Detalhamento de Tarefas por Épico
 
 ### Épico 01: Infraestrutura, Configurações e Erros Padronizados
-- **TASK-01-01**: Configurar estrutura base do projeto Node.js/TypeScript, linter, formato de arquivos e variáveis de ambiente (`FOOTBALL_DATA_API_KEY`, `JWT_SECRET`, `PORT`, `DATABASE_URL`).
+- **TASK-01-01**: Configurar a estrutura base do backend em Node.js com JavaScript, ES Modules e Express, além de scripts, linter, formato de arquivos e variáveis de ambiente (`API_KEY_FOOTBALL`, `JWT_SECRET`, `PORT`).
   - *Requisitos:* RNF-09
 - **TASK-01-02**: Criar Middleware de Correlation ID (`X-Correlation-Id`). Deve ler o header recebido ou gerar UUID v4 se ausente, anexando no contexto AsyncLocalStorage/request, no logger estruturado e no header de resposta HTTP.
   - *Requisitos:* RNF-06, CA-12
 - **TASK-01-03**: Criar Middleware Centralizado de Tratamento de Erros e o schema `Error` em conformidade estrita com o OpenAPI (`code`, `message`, `correlationId`).
   - *Requisitos:* RNF-07, CA-13
 
-### Épico 02: Persistência e Modelo de Dados Interno
-- **TASK-02-01**: Configurar banco de dados relacional (PostgreSQL) e ORM (Prisma/TypeORM).
+### Épico 02: Persistência JSON e Modelo de Dados Interno
+- **TASK-02-01**: Implementar um módulo reutilizável de persistência JSON com `node:fs/promises`, criação automática dos arquivos, leitura segura, fila de escritas no processo e gravação por arquivo temporário seguida de substituição.
   - *Requisitos:* RNF-09
-- **TASK-02-02**: Criar schema/migration para a tabela `usuarios` (`id`, `nome`, `email`, `senha_hash`, `role`, `criado_em`).
+- **TASK-02-02**: Implementar `UsuarioRepository` sobre `data/usuarios.json`, com os campos `id`, `nome`, `email`, `senhaHash`, `role`, `ativo` e `criadoEm`, garantindo unicidade de e-mail normalizado.
   - *Requisitos:* RF-01, RF-08, RNF-09
-- **TASK-02-03**: Criar schema/migration para a tabela `favoritos` com restrição de unicidade composta `unique(usuario_id, tipo, item_externo_id)`.
+- **TASK-02-03**: Implementar `FavoritoRepository` sobre `data/favoritos.json`, impedindo registros repetidos com a combinação `usuarioId + tipo + itemExternoId`.
   - *Requisitos:* RF-04, RF-07, RN-02, RNF-09
 
 ### Épico 03: Autenticação, Usuários e RBAC
-- **TASK-03-01**: Implementar `UsuarioRepository` e `UsuarioService` com suporte a hash seguro de senhas (bcrypt/argon2).
+- **TASK-03-01**: Implementar `UsuarioService` utilizando o `UsuarioRepository` e hash seguro de senhas (bcrypt/argon2), sem armazenar ou expor senha em texto puro.
   - *Requisitos:* RF-01, CA-01
 - **TASK-03-02**: Implementar Rota `POST /usuarios` para cadastro público de usuários.
   - *Requisitos:* RF-01, CA-01
@@ -90,8 +90,8 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
 - **TASK-07-01**: Implementar Controller/Service e Rotas Admin `GET /admin/usuarios` e `PATCH /admin/usuarios/{id}` protegidas por RBAC exclusivo para `admin`.
   - *Requisitos:* RF-08, RF-09, RN-04, RNF-02, CA-07
 
-### Épico 08: Frontend (SPA)
-- **TASK-08-01**: Implementar estrutura da SPA e cliente de API consumindo **exclusivamente** o Backend (BFF).
+### Épico 08: Frontend (React)
+- **TASK-08-01**: Inicializar a SPA com React e Vite e implementar o cliente de API com `fetch`, consumindo **exclusivamente** o Backend (BFF).
   - *Requisitos:* RF-11, RF-12
 - **TASK-08-02**: Implementar telas de Cadastro, Login e persistência local do Token JWT.
   - *Requisitos:* RF-01, RF-02
@@ -117,7 +117,7 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
 ## 4. Dependências e Ordem de Execução
 
 ```
-[Épico 01: Infra & Erros] ──▶ [Épico 02: Banco de Dados]
+[Épico 01: Infra & Erros] ──▶ [Épico 02: Persistência JSON]
                                        │
                                        ▼
                             [Épico 03: Auth & RBAC]
@@ -131,7 +131,7 @@ Implementar e validar o Backend (BFF), o armazenamento interno de dados e a inte
             │                                                     │
             └──────────────────────────┬──────────────────────────┘
                                        ▼
-                            [Épico 08: Frontend SPA]
+                            [Épico 08: Frontend React]
                                        │
                                        ▼
                             [Épico 09: Testes & QA]
@@ -147,6 +147,7 @@ Uma tarefa é considerada concluída se e somente se:
 3. Propaga o `X-Correlation-Id` e utiliza o formato de erro padronizado em falhas.
 4. Não vaza informações sensíveis (segredos, senhas ou tokens) em respostas ou logs.
 5. Possui suite de testes unitários ou de integração cobrindo os cenários principais e de exceção.
+6. Quando altera dados internos, preserva a validade dos arquivos JSON e não permite escrita concorrente dentro do processo.
 
 ---
 
@@ -187,3 +188,5 @@ Uma tarefa é considerada concluída se e somente se:
    - *Mitigação:* Isolar estritamente o cliente de API no backend (`FootballDataClient`) e validar no code review que o frontend consome apenas rotas relativas do backend.
 3. **Incompatibilidade ou divergência entre o backend e o OpenAPI**:
    - *Mitigação:* Executar a auditoria automatizada/manual contida na TASK-09-04 antes da liberação final do projeto.
+4. **Corrupção ou perda de dados em arquivos JSON durante uma escrita**:
+   - *Mitigação:* Centralizar todo acesso nos repositories, serializar escritas no processo, gravar primeiro em arquivo temporário e só então substituir o arquivo de destino. O projeto assume execução local em uma única instância Node.js.

@@ -8,10 +8,10 @@
 
 O sistema é uma aplicação web composta por:
 
-- **Frontend** (SPA) — consome exclusivamente a API interna do backend. Nunca acessa a football-data.org diretamente e nunca recebe a chave de API externa.
-- **Backend (BFF)** — API RESTful própria, responsável por autenticação/RBAC, persistência de dados internos (usuários e favoritos) e por toda a integração com a football-data.org, incluindo a transformação dos dados externos em schemas internos.
+- **Frontend** (SPA em React) — consome exclusivamente a API interna do backend. Nunca acessa a football-data.org diretamente e nunca recebe a chave de API externa.
+- **Backend (BFF)** — API RESTful em Node.js com JavaScript e Express, responsável por autenticação/RBAC, persistência de dados internos (usuários e favoritos) e por toda a integração com a football-data.org, incluindo a transformação dos dados externos em schemas internos.
 - **API externa (football-data.org, v4)** — fonte somente leitura de campeonatos, times e partidas. Acessada apenas pelo backend, com timeout, retry, circuit breaker e Correlation ID.
-- **Banco de dados relacional** — persiste apenas dados internos (usuários, favoritos). Dados esportivos não são persistidos como fonte de verdade (ver seção 7 e decisão em 11.7), apenas eventualmente cacheados de forma efêmera.
+- **Arquivos JSON locais** — persistem apenas os dados internos de usuários e favoritos, por se tratar de um projeto local, pequeno e voltado a estudo. Dados esportivos não são persistidos como fonte de verdade (ver seção 7.3), apenas eventualmente cacheados em memória.
 
 Princípio arquitetural central: **separação estrita entre dados internos e dados externos** (RNF-09), com o backend atuando como **Backend for Frontend (BFF)**: nenhuma resposta bruta da football-data.org chega ao cliente (RF-11, RF-12).
 
@@ -21,7 +21,7 @@ Arquitetura em camadas (layered architecture) dentro de um backend único (monó
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                            Frontend (SPA)                        │
+│                       Frontend (React SPA)                       │
 └───────────────────────────────┬──────────────────────────────────┘
                                  │ HTTPS + JWT (Authorization: Bearer)
 ┌───────────────────────────────▼──────────────────────────────────┐
@@ -31,15 +31,15 @@ Arquitetura em camadas (layered architecture) dentro de um backend único (monó
 │   Correlation-Id → Auth (JWT) → RBAC → Validação → Erros         │
 │                                                                   │
 │  ┌───────────────┐   ┌───────────────┐   ┌────────────────────┐  │
-│  │ Routes/        │──▶│ Services      │──▶│ Repositories        │ │
+│  │ Routes/        │──▶│ Services      │──▶│ Repositories JSON   │ │
 │  │ Controllers    │   │ (regra de     │   │ (dados internos:    │ │
 │  │ (usuarios,     │   │  negócio)     │   │  usuários,          │ │
 │  │  sessoes,      │   │               │   │  favoritos)         │ │
 │  │  favoritos,    │   │               │   └─────────┬──────────┘ │
 │  │  campeonatos,  │   │               │              │            │
 │  │  times,        │   │               │      ┌───────▼───────┐    │
-│  │  partidas,     │   │               │      │   Banco de     │    │
-│  │  admin)        │   └───────┬───────┘      │   Dados (SQL)  │    │
+│  │  partidas,     │   │               │      │ Arquivos JSON  │    │
+│  │  admin)        │   └───────┬───────┘      │ dados internos │    │
 │  └───────────────┘           │               └────────────────┘   │
 │                                │                                   │
 │                        ┌───────▼────────────┐                      │
@@ -73,10 +73,10 @@ Decisões arquiteturais chave:
 | **Middleware de Correlation ID** | Ler `X-Correlation-Id` da requisição ou gerar um (UUID v4) se ausente; anexar ao contexto, aos logs e ao header de resposta (RNF-06). |
 | **Middleware de Erros** | Capturar exceções e traduzi-las para o formato de erro padronizado (RNF-07), incluindo `correlationId`. |
 | **Services (Usuários, Sessões, Favoritos, Esportivo)** | Regras de negócio: hashing de senha, emissão de JWT, checagem de duplicidade de favorito (RN-02), checagem de propriedade (RN-03), orquestração de chamadas ao cliente externo + mapeamento. |
-| **Repositories (Usuários, Favoritos)** | Acesso ao banco relacional para dados internos. Não conhecem HTTP nem football-data.org. |
+| **Repositories (Usuários, Favoritos)** | Leitura e escrita dos arquivos JSON de dados internos por meio de `node:fs/promises`. Não conhecem HTTP nem football-data.org e centralizam o acesso aos arquivos. |
 | **Football-Data Client** | Único ponto de chamada à API externa. Implementa timeout (`AbortController`), retry com backoff exponencial, circuit breaker, e adiciona o `X-Auth-Token` lido de variável de ambiente. |
 | **Mapper/Transformer (BFF)** | Converte o payload bruto da football-data.org nos schemas internos (`Campeonato`, `Time`, `Partida`) definidos no OpenAPI. Único lugar onde o formato externo é conhecido. |
-| **Banco de Dados** | Persistência de `usuarios` e `favoritos`. Dados esportivos não são a fonte de verdade local (ver 7.3). |
+| **Armazenamento JSON** | Persistência local de `usuarios` e `favoritos` em arquivos separados. A escrita é serializada no processo e feita por arquivo temporário seguido de substituição, reduzindo o risco de corrupção. Dados esportivos não são persistidos localmente (ver 7.3). |
 
 ## 4. Contrato OpenAPI
 
@@ -104,32 +104,35 @@ Convenções aplicadas: recursos no plural, sem verbos (RF-03); paginação via 
 
 ## 5. Modelo de Dados
 
-### 5.1 Dados internos (persistidos)
+### 5.1 Dados internos (persistidos em JSON)
 
-**usuarios**
+**`data/usuarios.json`**
 | Campo | Tipo | Observação |
 |---|---|---|
-| id | UUID (PK) | |
+| id | UUID | Gerado pelo backend. |
 | nome | string | |
-| email | string, único | |
-| senha_hash | string | nunca exposto na API |
+| email | string | Único, comparado de forma normalizada. |
+| senhaHash | string | Nunca exposto na API. |
 | role | enum(`user`,`admin`) | RBAC |
-| criado_em | timestamp | |
+| ativo | boolean | Controlado pela rota administrativa. |
+| criadoEm | timestamp | ISO 8601. |
 
-**favoritos**
+**`data/favoritos.json`**
 | Campo | Tipo | Observação |
 |---|---|---|
-| id | UUID (PK) | |
-| usuario_id | UUID (FK → usuarios) | |
+| id | UUID | Gerado pelo backend. |
+| usuarioId | UUID | Referência lógica a um usuário existente. |
 | tipo | enum(`TIME`,`CAMPEONATO`) | |
-| item_externo_id | string/int | id do recurso na football-data.org |
-| criado_em | timestamp | |
+| itemExternoId | string | ID do recurso na football-data.org. |
+| criadoEm | timestamp | ISO 8601. |
 
-Restrição: **unique(usuario_id, tipo, item_externo_id)** — implementa RN-02/RF-07 no nível de banco, além da checagem no service.
+Regra de unicidade: antes de inserir, o repository deve rejeitar outra entrada com a mesma combinação `usuarioId + tipo + itemExternoId`. Essa validação implementa RN-02/RF-07 sem depender de banco relacional.
+
+Os arquivos contêm arrays JSON e são criados vazios na inicialização caso não existam. Como o sistema é local e executado em uma única instância Node.js, não há suporte a múltiplos processos escrevendo simultaneamente. Dentro do processo, as escritas devem ser enfileiradas e realizadas de forma atômica por arquivo temporário seguido de substituição.
 
 ### 5.2 Dados externos (não persistidos como fonte de verdade)
 
-`Campeonato`, `Time` e `Partida` são schemas de **resposta** do BFF, montados a partir da football-data.org em tempo de requisição (ou de um cache efêmero — ver 7.3), e **não** possuem tabela própria de escrita. Isso implementa RNF-09 (separação lógica) sem duplicar a fonte de dados esportivos.
+`Campeonato`, `Time` e `Partida` são schemas de **resposta** do BFF, montados a partir da football-data.org em tempo de requisição (ou de um cache efêmero — ver 7.3), e **não** são gravados nos arquivos JSON. Isso implementa RNF-09 (separação lógica) sem duplicar a fonte de dados esportivos.
 
 ## 6. Segurança JWT/RBAC
 
@@ -137,7 +140,7 @@ Restrição: **unique(usuario_id, tipo, item_externo_id)** — implementa RN-02/
 - Toda rota protegida passa por um middleware único de autenticação (RNF-01); nenhuma verificação de token é duplicada em controllers.
 - RBAC é resolvido por um middleware/decorator declarativo (`requireRole('admin')`) aplicado na definição da rota, nunca dentro da lógica de negócio (RNF-02).
 - Senhas armazenadas com hash + salt (ex.: bcrypt/argon2), nunca em texto plano.
-- A chave de API da football-data.org (`FOOTBALL_DATA_API_KEY`) e o segredo do JWT (`JWT_SECRET`) ficam **apenas** em variáveis de ambiente do backend; o frontend nunca as recebe.
+- A chave de API da football-data.org (`API_KEY_FOOTBALL`) e o segredo do JWT (`JWT_SECRET`) ficam **apenas** em variáveis de ambiente do backend; o frontend nunca as recebe.
 
 ## 7. Integração Externa e BFF
 
@@ -197,18 +200,21 @@ Observabilidade: logs estruturados (JSON) incluindo `correlationId`, rota, statu
 
 ## 10. Tecnologias e Riscos
 
-**Stack sugerida** (compatível com o escopo acadêmico, sem prender a implementação a uma stack obrigatória do PO):
-- Backend: Node.js + TypeScript (Express ou NestJS), por facilitar middlewares centralizados de auth/RBAC/correlation e um cliente HTTP com `AbortController` nativo.
-- Persistência: PostgreSQL, com ORM (Prisma ou TypeORM) para `usuarios` e `favoritos`.
+**Stack definida** (compatível com o escopo local e acadêmico):
+- Backend: Node.js com JavaScript, ES Modules e Express.
+- Persistência: arquivos JSON separados para `usuarios` e `favoritos`, acessados exclusivamente pelos repositories com `node:fs/promises`.
 - Autenticação: `jsonwebtoken` (ou equivalente) para JWT.
+- Validação: biblioteca de schemas compatível com JavaScript, como Zod.
+- Testes: Vitest ou Jest com Supertest para testes HTTP e de integração.
 - Documentação: OpenAPI 3.0 (`openapi.yaml`), servido via Swagger UI.
-- Frontend: SPA (React ou similar) consumindo apenas a API interna.
+- Frontend: React com Vite, consumindo apenas a API interna por `fetch`.
 
 **Riscos**:
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | Rate limit da football-data.org (10 req/min no plano free) | Erros 429/indisponibilidade sob uso concorrente | Cache efêmero (7.3), circuit breaker, backoff |
 | Dependência de disponibilidade externa | Indisponibilidade de dados esportivos | Circuit breaker fail-fast + mensagens de erro claras ao frontend |
+| Corrupção ou disputa de escrita nos arquivos JSON | Perda ou inconsistência de usuários/favoritos | Escritas serializadas no processo e substituição atômica por arquivo temporário; uso limitado a uma instância local |
 | Granularidade de dados de partida variar por plano (OA-02) | Campos do schema `Partida` podem precisar de ajuste | Mapper isola o formato externo; ajuste não deve vazar para o contrato interno sem nova revisão de OpenAPI |
 | Vazamento acidental da chave externa | Risco de segurança/custo | Chave nunca sai do backend; revisão de código deve checar isso |
 | Escopo de "rota admin" não fechado pelo PO (OA-05) | Retrabalho se PO decidir outra operação | Rota admin isolada em um controller próprio, fácil de trocar sem afetar o restante do contrato |
@@ -220,8 +226,10 @@ Estas são posições arquiteturais tomadas para poder desenhar um contrato conc
 1. **OA-04 (Idempotency Key)**: aplicada apenas em `POST /favoritos` (ver seção 8).
 2. **OA-05 (rota admin)**: proposta como `GET /admin/usuarios` (listar usuários) e `PATCH /admin/usuarios/{id}` (ativar/desativar usuário). Escolhida por ser a operação administrativa mais comum e de baixo risco para um MVP acadêmico; o PO pode substituir por outra (ex.: remover favoritos de terceiros) sem impacto no restante da arquitetura.
 3. **OA-06 (rate limit)**: documentado como 10 requisições/minuto no plano gratuito da football-data.org (fonte pública), refletido como restrição técnica na seção 7.3 e 10.
-4. **OA-07 (cache)**: recomendado cache efêmero em memória com TTL curto no Football-Data Client, não persistido em banco. Não introduz uma "fonte de verdade" local para dados esportivos, preservando RNF-09.
+4. **OA-07 (cache)**: recomendado cache efêmero em memória com TTL curto no Football-Data Client. Não introduz uma "fonte de verdade" local para dados esportivos, preservando RNF-09.
 5. **OA-01 e OA-02** (campos de cadastro e granularidade de partida) permanecem em aberto e devem ser fechados no próprio contrato OpenAPI (`openapi.yaml`) antes da implementação, onde os schemas `Usuario` (entrada) e `Partida` já trazem uma proposta mínima de campos para revisão do PO.
+6. **Persistência local**: por decisão de escopo, usuários e favoritos serão armazenados em arquivos JSON, sem PostgreSQL, ORM ou migrations. Essa escolha é adequada apenas à execução local em uma única instância e mantém a separação lógica exigida pelo RNF-09.
+7. **Stack de implementação**: o backend usará somente JavaScript em Node.js com Express; o frontend será desenvolvido em React com Vite.
 
 ---
 *Este `plan.md` não implementa código, não define backlog detalhado e não inventou nenhum endpoint externo além dos documentados publicamente pela football-data.org v4.*

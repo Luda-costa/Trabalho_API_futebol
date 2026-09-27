@@ -52,11 +52,18 @@ components:
       properties:
         error:
           type: object
-          required: [code, message, correlationId]
+          required:
+            - code
+            - message
+            - correlationId
           properties:
-            code: { type: string, example: "FAVORITO_DUPLICADO" }
-            message: { type: string }
-            correlationId: { type: string, format: uuid }
+            code:
+              type: string
+            message:
+              type: string
+            correlationId:
+              type: string
+              format: uuid
 
     UsuarioEntrada:
       type: object
@@ -68,11 +75,13 @@ components:
 
     Usuario:
       type: object
+      required: [id, nome, email, role, ativo, criadoEm]
       properties:
         id: { type: string, format: uuid }
         nome: { type: string }
         email: { type: string, format: email }
         role: { type: string, enum: [user, admin] }
+        ativo: { type: boolean }
         criadoEm: { type: string, format: date-time }
 
     Credenciais:
@@ -84,12 +93,14 @@ components:
 
     Sessao:
       type: object
+      required: [token, expiraEm]
       properties:
         token: { type: string, description: "JWT" }
         expiraEm: { type: string, format: date-time }
 
     Campeonato:
       type: object
+      required: [id, nome, pais, temporadaAtual]
       properties:
         id: { type: string, description: "id/código na football-data.org, ex.: PL" }
         nome: { type: string }
@@ -103,6 +114,7 @@ components:
 
     Time:
       type: object
+      required: [id, nome, sigla, escudoUrl, pais]
       properties:
         id: { type: integer }
         nome: { type: string }
@@ -112,11 +124,12 @@ components:
 
     Partida:
       type: object
+      required: [id, campeonatoId, dataHora, status, timeCasa, timeVisitante, placar]
       properties:
         id: { type: integer }
         campeonatoId: { type: string }
         dataHora: { type: string, format: date-time }
-        status: { type: string, enum: [SCHEDULED, LIVE, IN_PLAY, PAUSED, FINISHED, POSTPONED, SUSPENDED, CANCELED] }
+        status: { type: string, enum: [SCHEDULED, TIMED, IN_PLAY, PAUSED, EXTRA_TIME, PENALTY_SHOOTOUT, FINISHED, SUSPENDED, POSTPONED, CANCELLED, AWARDED] }
         timeCasa:
           $ref: '#/components/schemas/Time'
         timeVisitante:
@@ -137,6 +150,7 @@ components:
 
     Favorito:
       type: object
+      required: [id, tipo, itemExternoId, criadoEm]
       properties:
         id: { type: string, format: uuid }
         tipo: { type: string, enum: [TIME, CAMPEONATO] }
@@ -145,6 +159,7 @@ components:
 
     Paginacao:
       type: object
+      required: [page, pageSize, total]
       properties:
         page: { type: integer }
         pageSize: { type: integer }
@@ -155,27 +170,68 @@ components:
       description: Não autenticado
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NAO_AUTENTICADO
+              message: Autenticação necessária
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     Forbidden:
       description: Acesso negado (RBAC)
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: ACESSO_NEGADO
+              message: Acesso negado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     NotFound:
       description: Recurso não encontrado
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: RECURSO_NAO_ENCONTRADO
+              message: Recurso não encontrado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     ValidationError:
       description: Erro de validação
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: ERRO_VALIDACAO
+              message: Dados inválidos
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
+    ConflictUsuario:
+      description: Usuário já cadastrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: USUARIO_DUPLICADO
+              message: Usuário já cadastrado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     ExternalUnavailable:
       description: Football-data.org indisponível (timeout/5xx/circuit breaker OPEN)
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: SERVICO_EXTERNO_INDISPONIVEL
+              message: Serviço de dados esportivos indisponível
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
 
 security: []
 
