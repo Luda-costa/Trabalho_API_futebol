@@ -52,11 +52,18 @@ components:
       properties:
         error:
           type: object
-          required: [code, message, correlationId]
+          required:
+            - code
+            - message
+            - correlationId
           properties:
-            code: { type: string, example: "FAVORITO_DUPLICADO" }
-            message: { type: string }
-            correlationId: { type: string, format: uuid }
+            code:
+              type: string
+            message:
+              type: string
+            correlationId:
+              type: string
+              format: uuid
 
     UsuarioEntrada:
       type: object
@@ -163,27 +170,68 @@ components:
       description: Não autenticado
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NAO_AUTENTICADO
+              message: Autenticação necessária
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     Forbidden:
       description: Acesso negado (RBAC)
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: ACESSO_NEGADO
+              message: Acesso negado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     NotFound:
       description: Recurso não encontrado
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: RECURSO_NAO_ENCONTRADO
+              message: Recurso não encontrado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     ValidationError:
       description: Erro de validação
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: ERRO_VALIDACAO
+              message: Dados inválidos
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
+    ConflictUsuario:
+      description: Usuário já cadastrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: USUARIO_DUPLICADO
+              message: Usuário já cadastrado
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
     ExternalUnavailable:
       description: Football-data.org indisponível (timeout/5xx/circuit breaker OPEN)
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: SERVICO_EXTERNO_INDISPONIVEL
+              message: Serviço de dados esportivos indisponível
+              correlationId: 123e4567-e89b-42d3-a456-426614174000
 
 security: []
 
